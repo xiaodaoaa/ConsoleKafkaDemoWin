@@ -1,5 +1,5 @@
 {
-  "brokers": "localhost:9092",
+  "brokers": "10.196.8.193:9092",
   "topic": "test-topic",
   "group-id": "test-group",
   "partition": 0,
