@@ -55,6 +55,18 @@ ErrorCode Producer::Init() {
         return ErrorCode::INVALID_CONFIG;
     }
 
+    if (conf->set("dr_cb", static_cast<RdKafka::DeliveryReportCb*>(this), errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << "RdKafka conf set dr_cb failed: " << errstr << std::endl;
+        delete conf;
+        return ErrorCode::INVALID_CONFIG;
+    }
+
+    if (conf->set("event_cb", static_cast<RdKafka::EventCb*>(this), errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << "RdKafka conf set event_cb failed: " << errstr << std::endl;
+        delete conf;
+        return ErrorCode::INVALID_CONFIG;
+    }
+
     m_producer = RdKafka::Producer::create(conf, errstr);
     delete conf;
     if (!m_producer) {
@@ -124,6 +136,38 @@ ErrorCode Producer::Send(const std::string& payload, const std::string& key) {
 
 void Producer::SetDeliveryCallback(DeliveryCallback cb) {
     m_deliveryCb = std::move(cb);
+}
+
+void Producer::dr_cb(RdKafka::Message& message) {
+    if (m_deliveryCb) {
+        KafkaClient::Message msg;
+        if (message.payload()) {
+            msg.payload = std::string(static_cast<const char*>(message.payload()), message.len());
+        }
+        if (message.key()) {
+            msg.key = *message.key();
+        }
+        msg.offset = message.offset();
+        msg.partition = message.partition();
+        ErrorCode err = (message.err() == RdKafka::ERR_NO_ERROR)
+            ? ErrorCode::OK : ErrorCode::PRODUCE_FAIL;
+        m_deliveryCb(err, msg);
+    }
+}
+
+void Producer::event_cb(RdKafka::Event& event) {
+    switch (event.type()) {
+    case RdKafka::Event::EVENT_ERROR:
+        std::cerr << "PRODUCER ERROR: " << RdKafka::err2str(event.err())
+                  << " (fatal=" << (event.fatal() ? "yes" : "no")
+                  << "): " << event.str() << std::endl;
+        break;
+    case RdKafka::Event::EVENT_LOG:
+        std::cerr << "PRODUCER LOG: " << event.str() << std::endl;
+        break;
+    default:
+        break;
+    }
 }
 
 void Producer::Close() {

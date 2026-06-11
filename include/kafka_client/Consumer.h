@@ -7,15 +7,11 @@
 #include "Config.h"
 #include <mutex>
 
-namespace RdKafka {
-class Consumer;
-class Topic;
-class Message;
-}
+#include <kafka/rdkafkacpp.h>
 
 namespace KafkaClient {
 
-class Consumer {
+class Consumer : public RdKafka::EventCb {
 public:
     explicit Consumer(const ConsumerConfig& config);
     ~Consumer();
@@ -32,6 +28,7 @@ public:
     void Close();
 
 private:
+    void event_cb(RdKafka::Event& event) override;
     void ConsumeLoop();
     void ProcessMessage(RdKafka::Message* msg);
 
@@ -41,6 +38,7 @@ private:
     MessageCallback m_msgCb;
     bool m_initialized = false;
     bool m_running = false;
+    bool m_partitionsStopped = false;
     std::mutex m_mutex;
 };
 

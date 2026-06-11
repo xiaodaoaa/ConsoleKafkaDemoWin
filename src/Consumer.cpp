@@ -17,11 +17,13 @@ Consumer::Consumer(Consumer&& other) noexcept
       m_topic(other.m_topic),
       m_msgCb(std::move(other.m_msgCb)),
       m_initialized(other.m_initialized),
-      m_running(other.m_running) {
+      m_running(other.m_running),
+      m_partitionsStopped(other.m_partitionsStopped) {
     other.m_consumer = nullptr;
     other.m_topic = nullptr;
     other.m_initialized = false;
     other.m_running = false;
+    other.m_partitionsStopped = false;
 }
 
 Consumer& Consumer::operator=(Consumer&& other) noexcept {
@@ -33,10 +35,12 @@ Consumer& Consumer::operator=(Consumer&& other) noexcept {
         m_msgCb = std::move(other.m_msgCb);
         m_initialized = other.m_initialized;
         m_running = other.m_running;
+        m_partitionsStopped = other.m_partitionsStopped;
         other.m_consumer = nullptr;
         other.m_topic = nullptr;
         other.m_initialized = false;
         other.m_running = false;
+        other.m_partitionsStopped = false;
     }
     return *this;
 }
@@ -67,6 +71,12 @@ ErrorCode Consumer::Init() {
 
     if (conf->set("max.partition.fetch.bytes", "10240000", errstr) != RdKafka::Conf::CONF_OK) {
         std::cerr << "RdKafka conf set max.partition.fetch.bytes failed: " << errstr << std::endl;
+    }
+
+    if (conf->set("event_cb", this, errstr) != RdKafka::Conf::CONF_OK) {
+        std::cerr << "RdKafka conf set event_cb failed: " << errstr << std::endl;
+        delete conf;
+        return ErrorCode::INVALID_CONFIG;
     }
 
     m_consumer = RdKafka::Consumer::create(conf, errstr);
@@ -160,8 +170,24 @@ ErrorCode Consumer::Start() {
     } else {
         m_consumer->stop(m_topic, m_config.partition);
     }
+    m_partitionsStopped = true;
     m_consumer->poll(1000);
     return ErrorCode::OK;
+}
+
+void Consumer::event_cb(RdKafka::Event& event) {
+    switch (event.type()) {
+    case RdKafka::Event::EVENT_ERROR:
+        std::cerr << "CONSUMER ERROR: " << RdKafka::err2str(event.err())
+                  << " (fatal=" << (event.fatal() ? "yes" : "no")
+                  << "): " << event.str() << std::endl;
+        break;
+    case RdKafka::Event::EVENT_LOG:
+        std::cerr << "CONSUMER LOG: " << event.str() << std::endl;
+        break;
+    default:
+        break;
+    }
 }
 
 void Consumer::SetMessageCallback(MessageCallback cb) {
@@ -174,7 +200,7 @@ void Consumer::Stop() {
 }
 
 void Consumer::Close() {
-    if (m_consumer && m_topic) {
+    if (m_consumer && m_topic && !m_partitionsStopped) {
         if (m_config.partition == -1) {
             for (int32_t i = 0; i < m_config.numPartitions; i++) {
                 m_consumer->stop(m_topic, i);
@@ -194,6 +220,7 @@ void Consumer::Close() {
     }
     m_initialized = false;
     m_running = false;
+    m_partitionsStopped = false;
 }
 
 void Consumer::ProcessMessage(RdKafka::Message* msg) {

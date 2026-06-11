@@ -6,14 +6,11 @@
 #include "Types.h"
 #include "Config.h"
 
-namespace RdKafka {
-class Producer;
-class Topic;
-}
+#include <kafka/rdkafkacpp.h>
 
 namespace KafkaClient {
 
-class Producer {
+class Producer : public RdKafka::DeliveryReportCb, public RdKafka::EventCb {
 public:
     explicit Producer(const ProducerConfig& config);
     ~Producer();
@@ -29,6 +26,9 @@ public:
     void Close();
 
 private:
+    void dr_cb(RdKafka::Message& message) override;
+    void event_cb(RdKafka::Event& event) override;
+
     ProducerConfig m_config;
     RdKafka::Producer* m_producer = nullptr;
     RdKafka::Topic* m_topic = nullptr;
