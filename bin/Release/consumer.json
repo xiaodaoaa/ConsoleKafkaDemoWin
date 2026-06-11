@@ -1,0 +1,10 @@
+{
+  "brokers": "10.196.8.193:9092",
+  "topic": "test-topic",
+  "group-id": "test-group",
+  "partition": 0,
+  "num.partitions": 3,
+  "initial.offset": -1,
+  "consume.timeout.ms": 1000,
+  "auto.offset.reset": "earliest"
+}

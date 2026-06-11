@@ -1,0 +1,6 @@
+{
+  "brokers": "10.196.8.193:9092",
+  "topic": "test-topic",
+  "partition": 0,
+  "queue.buffering.max.ms": 5
+}
